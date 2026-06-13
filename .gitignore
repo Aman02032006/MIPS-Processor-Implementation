@@ -1,0 +1,17 @@
+# Vivado generated files and folders to ignore
+*.jou
+*.log
+*.pb
+*.wdb
+*.str
+*.zip
+*.hw
+*.ip_user_files
+*.cache
+*.runs
+*.sim
+*.srcs
+
+# OS generated files
+.DS_Store
+Thumbs.db
