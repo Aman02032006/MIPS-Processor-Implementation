@@ -13,19 +13,17 @@ graph TD
     classDef coreModule fill:#0984e3,stroke:#74b9ff,stroke-width:2px,color:#fff;
     classDef subModule fill:#00cec9,stroke:#81ecec,stroke-width:2px,color:#fff;
     classDef memory fill:#e84393,stroke:#fd79a8,stroke-width:2px,color:#fff;
-    classDef optimization fill:#fdcb6e,stroke:#ffeaa7,stroke-width:2px,color:#2d3436;
 
     %% Modules
-    Computer[Computer.v <br> Top-Level Architecture]:::topLevel
+    Computer["Computer.v <br> Top-Level Architecture"]:::topLevel
 
     subgraph Processor_Subsystem [Processor.v]
-        FSM[Control FSM <br> 3-Cycle Sequencer]:::coreModule
-        RegFile[Register File <br> 32x32-bit | $0 Hardwired]:::coreModule
-        ALU[Main ALU <br> Arithmetic/Logic]:::coreModule
-        FastAdder((Fast-Adder Bypass <br> Address Optimization)):::optimization
+        FSM["Control FSM <br> 3-Cycle Sequencer"]:::coreModule
+        RegFile["Register File <br> 32x32-bit | $0 Hardwired"]:::coreModule
+        ALU["Main ALU <br> Arithmetic/Logic"]:::coreModule
     end
 
-    Memory[Memory.v <br> Big-Endian Controller <br> lb, lbu, sb, sh logic]:::memory
+    Memory["Memory.v <br> Big-Endian Controller <br> lb, lbu, sb, sh logic"]:::memory
 
     %% Connections
     Computer --> Processor_Subsystem
@@ -38,8 +36,8 @@ graph TD
     RegFile ==>|Read Data 1 & 2| ALU
     ALU ==>|ALU Result| RegFile
     
-    RegFile ==>|Base Address| FastAdder
-    FastAdder ==>|Optimized Mem Address| Memory
+    %% Updated Datapath: ALU now drives the Memory Address directly
+    ALU ==>|Computed Mem Address| Memory
     
     Memory ==>|Load Data| RegFile
     RegFile ==>|Store Data| Memory
@@ -48,7 +46,7 @@ graph TD
 ## Key Architectural Features
 * **Fast-Adder Bypass:** To resolve critical path timing violations during memory access, a dedicated hardware adder (`fast_mem_addr = SRC1 + BRANCH_OFFSET`) bypasses the main ALU, allowing memory addresses to be computed instantly without waiting for the ALU propagation delay.
 * **Big-Endian Memory Controller:** Custom byte-enable extraction logic built directly into the datapath to precisely handle sub-word instructions (`lb`, `lbu`, `lh`, `lhu`, `sb`, `sh`).
-* **Hardwired `$0` Register:** The register file physically grounds register `$0` to prevent uninitialized data cascades (the "sea of red Xs") during branching and loading operations.
+* **Hardwired `$0` Register:** The register file physically grounds register `$0` to prevent uninitialized data cascades during branching and loading operations.
 * **Circular I/O Buffer:** Integrated an AXI-style hardware stall mechanism to securely buffer data out to a host environment without losing cycles.
 
 ## Performance & Hardware Metrics
