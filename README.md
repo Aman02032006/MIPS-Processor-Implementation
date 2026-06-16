@@ -43,6 +43,42 @@ graph TD
     RegFile ==>|Store Data| Memory
 ```
 
+## Detailed Architecture & Execution Flow
+
+This processor deviates from the traditional 5-stage MIPS pipeline, utilizing a highly optimized **3-Cycle Finite State Machine (FSM)**. This approach reduces control-hazard complexities while maintaining distinct fetch, execute, and write-back phases.
+
+### 1. Instruction Encoding
+The control unit natively decodes the standard 32-bit MIPS instruction formats, extracting the appropriate opcodes, register addresses, and immediate values combinationally.
+
+* **R-Type (Register):** Used for arithmetic and logical operations (`add`, `sub`, `and`, `or`, `sll`, `slt`).
+    * `[31:26]` Opcode | `[25:21]` rs | `[20:16]` rt | `[15:11]` rd | `[10:6]` shamt | `[5:0]` funct
+* **I-Type (Immediate):** Used for data transfer, branching, and immediate arithmetic (`lw`, `sw`, `beq`, `addi`).
+    * `[31:26]` Opcode | `[25:21]` rs | `[20:16]` rt | `[15:0]` Immediate (Sign or Zero Extended)
+* **J-Type (Jump):** Used for unconditional jumps (`j`, `jal`).
+    * `[31:26]` Opcode | `[25:0]` Target Address
+
+### 2. The 3-Cycle Execution FSM
+The core control logic is governed by a synchronous FSM inside `Processor.v`, managing the datapath across three primary states:
+
+* **State 0: Fetch & Decode**
+    * The `ins` (instruction) wire continuously reads from the `Memory` module based on the current Program Counter (PC).
+    * The FSM latches the extracted fields: `opcode`, `func`, `shift_amount`, and sign-extended immediates.
+    * The `RegisterFile` is accessed combinationally, latching `src1` and `src2` for the next clock edge.
+* **State 1: Execute & Memory Address Calculation**
+    * The **Main ALU** processes `src1` and `src2` (or the immediate value) based on the decoded operation.
+    * For memory instructions (`lw`, `sw`, `lb`, etc.), the ALU computes the effective memory address (`Base Address + Offset`).
+    * If a memory read/write is required, the `data_addr_valid` flag asserts, preparing the Big-Endian memory controller for the next cycle. 
+    * *Note: I/O handling (`syscall` read/print) halts standard execution here, transitioning to auxiliary wait-states to handshake with external environments.*
+* **State 2: Write-back & PC Update**
+    * The computed ALU result, or the fetched memory data, is written back to the destination register (`waddr`).
+    * Branch conditions are evaluated (`branch_taken`). If true, the PC updates to the calculated branch offset or jump target.
+    * If no branch is taken, the PC increments linearly (`PC <= PC + 1`), and the FSM loops back to State 0.
+
+### 3. Big-Endian Sub-Word Memory Access
+A standard 32-bit memory architecture inherently loads and stores full words. To support byte and half-word operations, custom extraction and alignment logic was built into the datapath:
+* **Stores (`sb`, `sh`):** The logic uses the lowest 2 bits of the computed address as a byte-offset. It fetches the existing 32-bit word from memory, dynamically masks out the targeted 8 or 16 bits, splices in the new sub-word from the register file, and issues a write-back.
+* **Loads (`lb`, `lbu`, `lh`, `lhu`):** The logic shifts the requested byte or half-word to the lowest significant bits and applies either a zero-extension (for unsigned) or a sign-extension (copying the MSB) before writing it to the destination register.
+
 ## Key Architectural Features
 * **Fast-Adder Bypass:** To resolve critical path timing violations during memory access, a dedicated hardware adder (`fast_mem_addr = SRC1 + BRANCH_OFFSET`) bypasses the main ALU, allowing memory addresses to be computed instantly without waiting for the ALU propagation delay.
 * **Big-Endian Memory Controller:** Custom byte-enable extraction logic built directly into the datapath to precisely handle sub-word instructions (`lb`, `lbu`, `lh`, `lhu`, `sb`, `sh`).
@@ -68,7 +104,7 @@ Following are the physical logic mapping and timing simulations.
 
 **[RTL Schematic (PDF)](./docs/MIPS%20Processor%20RTL%20Schematic.pdf)** - Register Transfer Level Layout of the different modules incorporated in the design.
 
-![Implemented Design (PNG)](./docs/Implemented%20Design.png)
+![Implemented Design (PNG)](./docs/Implemented%20Design.png)<br>
 *The physical layout and routing of the logic cells on the FPGA fabric after Place and Route.*
 
 ![Simulation Waveform (PNG)](./docs/Simulation%20Waveform.png)
